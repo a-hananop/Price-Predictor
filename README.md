@@ -1,4 +1,4 @@
-<![CDATA[# ⚡ Pakistan Electronics Price Intelligence
+# ⚡ Pakistan Electronics Price Intelligence
 
 A full-stack price comparison and route optimization platform for Pakistani electronics stores. Scrapes real-time product data from **30+ stores**, calculates travel costs (fuel + time), and recommends the best deal factoring in both **product price and physical distance**.
 
@@ -202,4 +202,4 @@ python verify_scrapers.py
 ## 📄 License
 
 This project is for educational and research purposes.
-]]>
+
