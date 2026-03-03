@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pakistan Electronics Intelligence — 30+ Store Price Comparison</title>
+  <meta name="description"
+    content="Compare electronics prices from 30+ Pakistani stores. Find the best deals with distance, fuel cost, and route optimization.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <!-- ── Background blobs ─────────────────────────────────────────────── -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
+  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">ElectroIntel</span>
+        <span class="logo-tag">Pakistan</span>
+      </div>
+      <nav class="header-nav">
+        <button class="nav-btn active" data-view="optimizer">Optimizer</button>
+        <button class="nav-btn" data-view="catalog">All Products</button>
+        <button class="nav-btn" data-view="stores">Stores</button>
+        <button class="nav-btn" data-view="map">Map</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Main ──────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ── OPTIMIZER VIEW ──────────────────────────────────────────── -->
+    <section class="view active" id="view-optimizer">
+
+      <!-- Search Panel -->
+      <aside class="panel panel-search">
+        <div class="panel-header">
+          <h2>⚡ Electronics Price Engine</h2>
+          <p>Compare prices from <strong>30+ Pakistani stores</strong>. Calculate distance, fuel cost, and find the
+            smartest deal.</p>
+          <div class="realtime-badge">● Scraping 30+ Stores Active</div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="form-group" style="margin-bottom:1.5rem">
+          <label class="form-label">🔍 Search Electronics</label>
+          <div style="display:flex;gap:10px">
+            <input type="text" id="inp-search" placeholder="e.g. Samsung TV, Arduino, AC" class="inp" style="flex:1">
+            <button id="btn-search" class="btn btn-secondary" style="padding:0 20px">Search</button>
+          </div>
+          <div class="sub-cat-hints" style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">
+            <span class="hint-tag" data-q="Samsung TV"># Samsung TV</span>
+            <span class="hint-tag" data-q="Arduino"># Arduino</span>
+            <span class="hint-tag" data-q="iPhone"># iPhone</span>
+            <span class="hint-tag" data-q="Laptop"># Laptop</span>
+            <span class="hint-tag" data-q="AC"># AC</span>
+            <span class="hint-tag" data-q="Washing Machine"># Washing Machine</span>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-group">
+          <label class="form-label">📍 Your Location</label>
+          <div class="location-row">
+            <input type="number" id="inp-lat" placeholder="Latitude" step="0.0001" class="inp">
+            <input type="number" id="inp-lon" placeholder="Longitude" step="0.0001" class="inp">
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-geolocate">
+            <span class="btn-icon">◎</span> Detect My Location
+          </button>
+        </div>
+
+        <!-- Store Filter -->
+        <div class="form-group">
+          <label class="form-label">🏬 Store Filter</label>
+          <div class="category-chips" id="store-filter-chips">
+            <button class="chip active" data-filter="all">All Stores</button>
+            <button class="chip" data-filter="physical">🏬 Physical</button>
+            <button class="chip" data-filter="online">🌐 Online</button>
+          </div>
+        </div>
+
+        <!-- Budget -->
+        <div class="form-group">
+          <label class="form-label">💰 Max Budget (PKR, optional)</label>
+          <input type="number" id="inp-budget" placeholder="e.g. 50000" class="inp" min="0">
+        </div>
+
+        <!-- Priority -->
+        <div class="form-group">
+          <label class="form-label">⚖️ Optimize For</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="priority" value="total_cost" checked> Total Cost
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="priority" value="price"> Cheapest Item
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="priority" value="distance"> Nearest Store
+            </label>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-optimize">
+          <span class="btn-icon">⟳</span>
+          <span id="btn-optimize-label">Find Best Deal</span>
+        </button>
+      </aside>
+
+      <!-- Results Panel -->
+      <div class="panel-results" id="results-area">
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">⚡</div>
+          <h3>Ready to Find the Best Electronics Deal</h3>
+          <p>Enter your location, search for a product, and hit "Find Best Deal" to see ranked stores with distance,
+            fuel cost, and total spend breakdown.</p>
+          <div class="empty-features">
+            <span>📏 Distance to Store</span>
+            <span>⛽ Fuel Cost</span>
+            <span>🏬 30+ Stores</span>
+          </div>
+        </div>
+
+        <!-- Results list -->
+        <div class="results-list hidden" id="results-list">
+          <div class="results-header">
+            <div class="results-title-row">
+              <h3 id="results-title">Results</h3>
+              <span class="results-count" id="results-count"></span>
+            </div>
+            <div class="advice-box" id="advice-box"></div>
+          </div>
+          <div class="cards-grid" id="cards-grid"></div>
+        </div>
+
+        <!-- Multi-stop plan -->
+        <div class="multi-plan hidden" id="multi-plan">
+          <h3>🗺 Optimal Multi-Stop Route</h3>
+          <div class="stops-list" id="stops-list"></div>
+          <div class="plan-summary" id="plan-summary"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CATALOG VIEW ──────────────────────────────────────────────── -->
+    <section class="view" id="view-catalog">
+      <div class="catalog-header">
+        <h2>⚡ All Electronics Products</h2>
+        <p>Browse products from 30+ Pakistani electronics stores — physical and online.</p>
+        <div class="catalog-controls">
+          <div class="category-chips">
+            <button class="chip active" data-filter="all" id="cat-filter-all">All</button>
+            <button class="chip" data-filter="physical" id="cat-filter-physical">🏬 Physical Stores</button>
+            <button class="chip" data-filter="online" id="cat-filter-online">🌐 Online Stores</button>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btn-refresh-catalog">⟳ Refresh</button>
+        </div>
+      </div>
+      <div class="catalog-grid" id="catalog-grid">
+        <div class="loading-state" id="catalog-loading">
+          <div class="spinner"></div>
+          <p>Loading products from 30+ stores…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── STORES VIEW ────────────────────────────────────────────────── -->
+    <section class="view" id="view-stores">
+      <div class="catalog-header">
+        <h2>🏬 All Pakistani Electronics Stores</h2>
+        <p>30+ verified stores — physical and online. Physical stores show distance and fuel costs.</p>
+        <div class="catalog-controls">
+          <div class="category-chips">
+            <button class="chip active" data-sfilter="all">All</button>
+            <button class="chip" data-sfilter="physical">🏬 Physical</button>
+            <button class="chip" data-sfilter="online">🌐 Online</button>
+          </div>
+        </div>
+      </div>
+      <div class="stores-grid" id="stores-grid">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading stores…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MAP VIEW ──────────────────────────────────────────────────── -->
+    <section class="view" id="view-map">
+      <div class="map-overlay-panel" id="map-legend">
+        <h3>Pakistan Electronics Hubs</h3>
+        <p style="font-size:0.75rem; color:var(--muted); margin-bottom:10px">Physical store locations across Pakistan
+        </p>
+        <div id="branch-legend-list"></div>
+      </div>
+      <iframe id="gmap-iframe"
+        src="https://www.google.com/maps/embed?pb=!1m12!1m3!1d14474757.2186178!2d69.345116!3d30.375321!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sElectronics%20stores%20Pakistan!5e0!3m2!1sen!2spk!4v1700000000000!5m2!1sen!2spk"
+        width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade">
+      </iframe>
+    </section>
+
+  </main>
+
+  <!-- ── Detail Modal ──────────────────────────────────────────────────── -->
+  <div class="modal-backdrop hidden" id="modal-backdrop">
+    <div class="modal" id="detail-modal">
+      <button class="modal-close" id="modal-close">✕</button>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Toast ─────────────────────────────────────────────────────────── -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ── Scripts ───────────────────────────────────────────────────────── -->
+  <script>
+    window.GOOGLE_MAPS_KEY = "{{ google_maps_key }}";
+  </script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+  {% if google_maps_key and google_maps_key != 'YOUR_GOOGLE_MAPS_API_KEY_HERE' %}
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_key }}&callback=initMap"></script>
+  {% else %}
+  <script>
+    window.addEventListener('load', () => {
+      if (typeof window.initMap === 'function') window.initMap(false);
+    });
+  </script>
+  {% endif %}
+</body>
+
+</html>
