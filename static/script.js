@@ -5,12 +5,17 @@
 const state = {
   userLat: null,
   userLon: null,
-  storeFilter: 'all',    // 'all' | 'physical' | 'online'
+  storeFilter: 'all',
   results: null,
   catalogFilter: 'all',
   allProducts: [],
   allStores: [],
   branches: [],
+  leafletMap: null,
+  mapMarkers: [],
+  userMarker: null,
+  mapInitialized: false,
+  searchQuery: null,
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -26,9 +31,7 @@ function toast(msg, type = 'info') {
 }
 
 function stagger(elements, delayMs = 80) {
-  elements.forEach((el, i) => {
-    el.style.animationDelay = `${i * delayMs}ms`;
-  });
+  elements.forEach((el, i) => { el.style.animationDelay = `${i * delayMs}ms`; });
 }
 
 function stars(n, total = 5) {
@@ -47,13 +50,18 @@ $$('.nav-btn').forEach(btn => {
     const view = btn.dataset.view;
     $$('.nav-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-
     $$('.view').forEach(v => v.classList.remove('active'));
     const target = $(`view-${view}`);
     target.classList.add('active');
 
     if (view === 'catalog') loadCatalog();
     if (view === 'stores') loadStoresView();
+    if (view === 'map') {
+      setTimeout(() => {
+        if (!state.mapInitialized) initLeafletMap();
+        else if (state.leafletMap) state.leafletMap.invalidateSize();
+      }, 100);
+    }
   });
 });
 
@@ -69,6 +77,7 @@ $('btn-geolocate').addEventListener('click', () => {
       $('inp-lon').value = fmt(state.userLon, 6);
       $('btn-geolocate').innerHTML = '<span class="btn-icon">◎</span> Detect My Location';
       toast('Location detected!', 'success');
+      updateUserMarker();
     },
     err => {
       toast('Could not detect location: ' + err.message, 'error');
@@ -84,6 +93,8 @@ $$('#store-filter-chips .chip').forEach(chip => {
     $$('#store-filter-chips .chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     state.storeFilter = chip.dataset.filter;
+    // Re-render results if data exists
+    if (state.results) renderResults(state.results);
   });
 });
 
@@ -108,7 +119,9 @@ $('btn-optimize').addEventListener('click', async () => {
   $('multi-plan').classList.add('hidden');
 
   try {
-    const data = await post('/api/optimize', { user_lat: lat, user_lon: lon, category: 'electronics', budget, priority });
+    const query = state.searchQuery || $('inp-search').value.trim() || null;
+    const data = await post('/api/optimize', { user_lat: lat, user_lon: lon, category: 'electronics', budget, priority, query });
+    state.results = data;
     renderResults(data);
   } catch (err) {
     toast('Error: ' + err.message, 'error');
@@ -134,7 +147,13 @@ async function post(url, body) {
 function renderResults(data) {
   if (data.error) { toast(data.error, 'error'); $('empty-state').classList.remove('hidden'); return; }
 
-  const options = data.all_options || [];
+  let options = data.all_options || [];
+
+  // Apply store type filter
+  if (state.storeFilter !== 'all') {
+    options = options.filter(o => o.branch_type === state.storeFilter);
+  }
+
   $('results-count').textContent = `${options.length} store${options.length !== 1 ? 's' : ''}`;
   $('results-title').textContent = `Results — Electronics`;
 
@@ -145,15 +164,19 @@ function renderResults(data) {
 
   const grid = $('cards-grid');
   grid.innerHTML = '';
-  options.forEach((opt, i) => {
-    const card = buildResultCard(opt, i);
-    grid.appendChild(card);
-  });
 
-  stagger(grid.querySelectorAll('.result-card'));
+  if (options.length === 0) {
+    grid.innerHTML = '<div class="loading-state"><span style="font-size:2rem">📭</span><p>No stores match the current filter.</p></div>';
+  } else {
+    options.forEach((opt, i) => {
+      const card = buildResultCard(opt, i);
+      grid.appendChild(card);
+    });
+    stagger(grid.querySelectorAll('.result-card'));
+  }
+
   $('results-list').classList.remove('hidden');
   $('empty-state').classList.add('hidden');
-  state.results = data;
 }
 
 function buildResultCard(opt, rank) {
@@ -173,7 +196,7 @@ function buildResultCard(opt, rank) {
     <div class="card-branch-name">${opt.branch_name} ${typeBadge}</div>
     <div class="card-city">📍 ${opt.city} · ${opt.address}</div>
 
-      <div class="card-product">
+    <div class="card-product">
       <div class="card-product-name">${opt.product}</div>
       <div class="card-product-price">Rs. ${fmt(opt.product_price)} <span>item price</span></div>
       <div class="card-stars">${stars(opt.product_rating)}</div>
@@ -205,18 +228,39 @@ function buildResultCard(opt, rank) {
       </div>
       <div class="total-value">Rs. ${fmt(opt.grand_total)}</div>
     </div>
+
+    <div class="card-actions">
+      ${storeType === 'physical' ? `<button class="btn btn-ghost btn-sm btn-view-map" data-lat="${opt.lat}" data-lon="${opt.lon}" data-name="${opt.branch_name}">📍 View on Map</button>` : ''}
+      ${opt.branch_url ? `<a href="${opt.branch_url}" target="_blank" class="btn btn-ghost btn-sm">🌐 Website ↗</a>` : ''}
+    </div>
   `;
 
-  el.addEventListener('click', () => openModal(opt));
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('.btn-view-map') || e.target.closest('a')) return;
+    openModal(opt);
+  });
+
+  // View on Map button
+  const mapBtn = el.querySelector('.btn-view-map');
+  if (mapBtn) {
+    mapBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      flyToStoreOnMap(parseFloat(mapBtn.dataset.lat), parseFloat(mapBtn.dataset.lon), mapBtn.dataset.name);
+    });
+  }
+
   return el;
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────
 function openModal(opt) {
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${opt.lat},${opt.lon}`;
+
   $('modal-body').innerHTML = `
     <div class="modal-branch-name">${opt.branch_name}</div>
     <div class="modal-address">📍 ${opt.address}</div>
-    ${opt.phone ? `<div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">📞 ${opt.phone}</div>` : ''}
+    ${opt.phone ? `<div style="font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem">📞 ${opt.phone}</div>` : ''}
+    ${opt.branch_url ? `<a href="${opt.branch_url}" target="_blank" style="font-size:0.82rem;color:var(--accent);text-decoration:none;display:inline-block;margin-bottom:1rem">🌐 ${opt.branch_url} ↗</a>` : ''}
 
     <div class="modal-section-title">Best Product Available</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
@@ -255,6 +299,12 @@ function openModal(opt) {
     <div style="margin-top:10px;font-size:0.75rem;color:var(--muted)">
       Distances calculated ${opt.via === 'google_maps' ? 'via Google Maps Roads API' : 'via Haversine (estimated road distance)'}
     </div>
+
+    <div class="modal-actions">
+      <a href="${directionsUrl}" target="_blank" class="btn btn-primary" style="margin-top:1.25rem;text-decoration:none;font-size:0.85rem">
+        🧭 Get Directions in Google Maps
+      </a>
+    </div>
   `;
 
   $('modal-backdrop').classList.remove('hidden');
@@ -263,6 +313,12 @@ function openModal(opt) {
 $('modal-close').addEventListener('click', () => $('modal-backdrop').classList.add('hidden'));
 $('modal-backdrop').addEventListener('click', e => {
   if (e.target === $('modal-backdrop')) $('modal-backdrop').classList.add('hidden');
+});
+// Escape key closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('modal-backdrop').classList.contains('hidden')) {
+    $('modal-backdrop').classList.add('hidden');
+  }
 });
 
 // ── Catalog ───────────────────────────────────────────────────────────────
@@ -284,7 +340,6 @@ async function loadCatalog(filter) {
       state.allProducts = products;
     }
 
-    // Filter by store type
     if (currentFilter !== 'all') {
       products = products.filter(p => p.store_type === currentFilter);
     }
@@ -373,7 +428,7 @@ async function loadStoresView(filter = 'all') {
       if (s.type === 'physical' && state.userLat && state.userLon) {
         const dist = haversineKm(state.userLat, state.userLon, s.lat, s.lon);
         const roadDist = (dist * 1.3).toFixed(1);
-        const fuelCost = Math.round(roadDist * 25); // Rs 25/km
+        const fuelCost = Math.round(roadDist * 25);
         distanceInfo = `
           <div class="store-distance">
             <span>📏 ~${roadDist} km</span>
@@ -381,6 +436,10 @@ async function loadStoresView(filter = 'all') {
           </div>
         `;
       }
+
+      const viewMapBtn = s.type === 'physical'
+        ? `<button class="btn btn-ghost btn-sm btn-view-map" data-lat="${s.lat}" data-lon="${s.lon}" data-name="${s.name}" style="margin-top:8px;font-size:0.75rem">📍 View on Map</button>`
+        : '';
 
       el.innerHTML = `
         <div class="store-header">
@@ -390,8 +449,20 @@ async function loadStoresView(filter = 'all') {
         <div class="store-city">📍 ${s.city} — ${s.address}</div>
         ${s.phone ? `<div class="store-phone">📞 ${s.phone}</div>` : ''}
         ${distanceInfo}
-        ${hasUrl}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${hasUrl}
+          ${viewMapBtn}
+        </div>
       `;
+
+      // Wire map button
+      const mapBtnEl = el.querySelector('.btn-view-map');
+      if (mapBtnEl) {
+        mapBtnEl.addEventListener('click', () => {
+          flyToStoreOnMap(parseFloat(mapBtnEl.dataset.lat), parseFloat(mapBtnEl.dataset.lon), mapBtnEl.dataset.name);
+        });
+      }
+
       grid.appendChild(el);
     });
   } catch (err) {
@@ -417,36 +488,194 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.asin(Math.sqrt(a));
 }
 
-// ── Map / Branch Legend ──────────────────────────────────────────────────
+// ── City colors for markers ─────────────────────────────────────────────
+const CITY_COLORS = {
+  'Karachi': '#ff6b6b',
+  'Lahore': '#51cf66',
+  'Islamabad': '#339af0',
+  'Rawalpindi': '#cc5de8',
+  'Multan': '#ffd43b',
+  'Online': '#868e96',
+};
+
+function getCityColor(city) {
+  return CITY_COLORS[city] || '#20c997';
+}
+
+function createColoredIcon(color) {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `<div style="
+      width:14px;height:14px;border-radius:50%;
+      background:${color};
+      border:3px solid rgba(255,255,255,0.9);
+      box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    "></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -12],
+  });
+}
+
+// ── Leaflet Map ─────────────────────────────────────────────────────────
+function initLeafletMap() {
+  if (state.mapInitialized) return;
+
+  const map = L.map('leaflet-map', {
+    center: [30.3753, 69.3451], // Pakistan center
+    zoom: 5,
+    zoomControl: true,
+    scrollWheelZoom: true,
+  });
+
+  // Dark-themed tiles (CartoDB Dark Matter)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(map);
+
+  state.leafletMap = map;
+  state.mapInitialized = true;
+
+  // Add store markers
+  addStoreMarkers();
+
+  // Add user marker if location is set
+  if (state.userLat && state.userLon) {
+    updateUserMarker();
+  }
+}
+
+function addStoreMarkers() {
+  if (!state.leafletMap) return;
+
+  // Clear existing
+  state.mapMarkers.forEach(m => state.leafletMap.removeLayer(m));
+  state.mapMarkers = [];
+
+  const physicalBranches = state.branches.filter(b => b.type === 'physical');
+
+  physicalBranches.forEach(b => {
+    const color = getCityColor(b.city);
+    const icon = createColoredIcon(color);
+
+    const popup = L.popup({ className: 'dark-popup' }).setContent(`
+      <div class="map-popup-content">
+        <div class="popup-name">${b.name}</div>
+        <div class="popup-city">📍 ${b.city}</div>
+        <div class="popup-address">${b.address}</div>
+        ${b.phone ? `<div class="popup-phone">📞 ${b.phone}</div>` : ''}
+        ${b.url ? `<a href="${b.url}" target="_blank" class="popup-link">Visit Website ↗</a>` : ''}
+        ${state.userLat ? `<div class="popup-distance">📏 ~${(haversineKm(state.userLat, state.userLon, b.lat, b.lon) * 1.3).toFixed(1)} km away</div>` : ''}
+      </div>
+    `);
+
+    const marker = L.marker([b.lat, b.lon], { icon }).addTo(state.leafletMap).bindPopup(popup);
+    marker._storeData = b;
+    state.mapMarkers.push(marker);
+  });
+
+  // Fit bounds if markers exist
+  if (state.mapMarkers.length > 0) {
+    const group = L.featureGroup(state.mapMarkers);
+    state.leafletMap.fitBounds(group.getBounds().pad(0.1));
+  }
+}
+
+function updateUserMarker() {
+  if (!state.leafletMap || !state.userLat || !state.userLon) return;
+
+  if (state.userMarker) {
+    state.leafletMap.removeLayer(state.userMarker);
+  }
+
+  const userIcon = L.divIcon({
+    className: 'user-marker',
+    html: `<div style="
+      width:18px;height:18px;border-radius:50%;
+      background:#00d4ff;
+      border:3px solid #fff;
+      box-shadow:0 0 12px rgba(0,212,255,0.6), 0 2px 8px rgba(0,0,0,0.4);
+      animation: userPulse 2s ease-in-out infinite;
+    "></div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -14],
+  });
+
+  state.userMarker = L.marker([state.userLat, state.userLon], { icon: userIcon, zIndexOffset: 1000 })
+    .addTo(state.leafletMap)
+    .bindPopup('<div class="map-popup-content"><div class="popup-name">📍 Your Location</div></div>');
+
+  // Re-add store markers with updated distances
+  addStoreMarkers();
+}
+
+function flyToStoreOnMap(lat, lon, name) {
+  // Switch to map view
+  const mapBtn = [...$$('.nav-btn')].find(b => b.dataset.view === 'map');
+  if (mapBtn) mapBtn.click();
+
+  setTimeout(() => {
+    if (!state.mapInitialized) initLeafletMap();
+    state.leafletMap.flyTo([lat, lon], 15, { duration: 1.5 });
+
+    // Open the popup for this marker
+    const marker = state.mapMarkers.find(m => {
+      const pos = m.getLatLng();
+      return Math.abs(pos.lat - lat) < 0.001 && Math.abs(pos.lng - lon) < 0.001;
+    });
+    if (marker) {
+      setTimeout(() => marker.openPopup(), 1600);
+    }
+  }, 200);
+}
+
+// ── Map Legend ──────────────────────────────────────────────────────────
 function buildBranchLegend() {
   const list = $('branch-legend-list');
   if (!list) return;
   list.innerHTML = '';
 
-  const branches = state.branches.length > 0 ? state.branches.filter(b => b.type === 'physical') : [];
+  const branches = state.branches.filter(b => b.type === 'physical');
 
   if (!branches.length) {
     list.innerHTML = '<p style="font-size:0.75rem;color:var(--muted)">Loading store locations...</p>';
     return;
   }
 
-  branches.forEach((b, i) => {
-    const item = document.createElement('div');
-    item.className = 'branch-legend-item';
-    item.innerHTML = `
-      <div class="legend-dot" style="background:hsl(${(i * 25) % 360},80%,60%)"></div>
-      <div>
-        <div class="legend-name">${b.name}</div>
-        <div class="legend-cats">${b.city}</div>
-      </div>
-    `;
-    list.appendChild(item);
+  // Group by city
+  const cities = {};
+  branches.forEach(b => {
+    if (!cities[b.city]) cities[b.city] = [];
+    cities[b.city].push(b);
+  });
+
+  Object.entries(cities).forEach(([city, stores]) => {
+    const color = getCityColor(city);
+    const cityHeader = document.createElement('div');
+    cityHeader.className = 'legend-city-header';
+    cityHeader.innerHTML = `<div class="legend-dot" style="background:${color}"></div> <strong>${city}</strong> <span style="color:var(--muted);font-size:0.7rem">(${stores.length})</span>`;
+    list.appendChild(cityHeader);
+
+    stores.forEach(b => {
+      const item = document.createElement('div');
+      item.className = 'branch-legend-item';
+      item.innerHTML = `
+        <div class="legend-dot" style="background:${color}"></div>
+        <div>
+          <div class="legend-name">${b.name}</div>
+          <div class="legend-cats">${b.address}</div>
+        </div>
+      `;
+      item.addEventListener('click', () => {
+        flyToStoreOnMap(b.lat, b.lon, b.name);
+      });
+      list.appendChild(item);
+    });
   });
 }
-
-window.initMap = function (realApi = true) {
-  console.log('Map initialized via Google Embed.');
-};
 
 // ── Search ──────────────────────────────────────────────────────────────
 $('btn-search')?.addEventListener('click', async () => {
@@ -458,6 +687,9 @@ $('btn-search')?.addEventListener('click', async () => {
   btn.innerHTML = '<div class="spinner"></div>';
   btn.disabled = true;
 
+  // Save query so optimizer can use it
+  state.searchQuery = query;
+
   try {
     const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
     const data = await r.json();
@@ -466,13 +698,7 @@ $('btn-search')?.addEventListener('click', async () => {
     state.allProducts = data.products || [];
     state.catalogFilter = 'all';
 
-    // Switch to catalog view
-    const catalogBtn = [...$$('.nav-btn')].find(b => b.dataset.view === 'catalog');
-    if (catalogBtn) {
-      catalogBtn.click();
-    }
-
-    toast(`Found ${data.products.length} products for "${query}"`, 'success');
+    toast(`Found ${data.products.length} products for "${query}". Click "Find Best Deal" to optimize!`, 'success');
   } catch (err) {
     toast(err.message, 'error');
   } finally {
@@ -494,14 +720,9 @@ $$('.hint-tag').forEach(tag => {
   });
 });
 
-// ── Utility ────────────────────────────────────────────────────────────────
-function capitalize(str) {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
 // ── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
-  // Preload branches for the legend
+  // Preload branches for the legend and map
   try {
     const r = await fetch('/api/branches');
     const d = await r.json();

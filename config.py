@@ -6,7 +6,7 @@ and branch data for distance/route optimization.
 """
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
-GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+GOOGLE_MAPS_API_KEY = "LWFCys1TVy4a27iSLniH"
 
 # ── Fuel / Travel Constants (Pakistan 2024-25) ────────────────────────────────
 FUEL_PRICE_PER_LITER = 300.0      # PKR per liter (petrol)

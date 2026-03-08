@@ -20,7 +20,10 @@ def recommend(ranked: list[dict]) -> dict:
 
     best_overall   = ranked[0]
     cheapest_item  = min(ranked, key=lambda x: x["product_price"])
-    nearest_branch = min(ranked, key=lambda x: x["distance_km"])
+
+    # Only consider physical stores for "nearest" calculations
+    physical_ranked = [r for r in ranked if r.get("branch", {}).get("type") == "physical"]
+    nearest_branch = min(physical_ranked, key=lambda x: x["distance_km"]) if physical_ranked else best_overall
 
     savings_vs_nearest = round(
         nearest_branch["grand_total"] - best_overall["grand_total"], 2
@@ -30,14 +33,14 @@ def recommend(ranked: list[dict]) -> dict:
 
     if best_overall["branch"]["id"] == cheapest_item["branch"]["id"]:
         advice_lines.append(
-            f"✅ {best_overall['branch']['name']} is both the cheapest option AND closest — a clear win."
+            f"✅ {best_overall['branch']['name']} has the best deal overall — "
+            f"Rs. {best_overall['grand_total']:.0f} total (item + travel)."
         )
     else:
         advice_lines.append(
             f"💡 The cheapest item is at {cheapest_item['branch']['name']} "
-            f"(Rs. {cheapest_item['product_price']:.0f}), but the extra travel of "
-            f"{cheapest_item['distance_km']:.0f} km may cost an extra "
-            f"Rs. {cheapest_item['travel_cost']:.0f} in fuel & time."
+            f"(Rs. {cheapest_item['product_price']:.0f}), but total cost with travel is "
+            f"Rs. {cheapest_item['grand_total']:.0f}."
         )
         if savings_vs_nearest > 0:
             advice_lines.append(
@@ -45,10 +48,9 @@ def recommend(ranked: list[dict]) -> dict:
                 f"Rs. {savings_vs_nearest:.0f} overall vs the nearest store."
             )
 
-
-    if nearest_branch["branch"]["id"] != best_overall["branch"]["id"]:
+    if physical_ranked and nearest_branch["branch"]["id"] != best_overall["branch"]["id"]:
         advice_lines.append(
-            f"📍 Nearest store: {nearest_branch['branch']['name']} "
+            f"📍 Nearest physical store: {nearest_branch['branch']['name']} "
             f"({nearest_branch['distance_km']:.1f} km, "
             f"~{nearest_branch['duration_min']:.0f} min drive)."
         )
@@ -122,6 +124,8 @@ def _fmt(r: dict) -> dict:
     return {
         "branch_id":      r["branch"]["id"],
         "branch_name":    r["branch"]["name"],
+        "branch_type":    r["branch"].get("type", "physical"),
+        "branch_url":     r["branch"].get("url", ""),
         "city":           r["branch"]["city"],
         "address":        r["branch"]["address"],
         "lat":            r["branch"]["lat"],

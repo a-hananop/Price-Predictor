@@ -12,6 +12,9 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap"
     rel="stylesheet">
+  <!-- Leaflet.js CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -204,16 +207,12 @@
     <!-- ── MAP VIEW ──────────────────────────────────────────────────── -->
     <section class="view" id="view-map">
       <div class="map-overlay-panel" id="map-legend">
-        <h3>Pakistan Electronics Hubs</h3>
+        <h3>🗺️ Pakistan Electronics Hubs</h3>
         <p style="font-size:0.75rem; color:var(--muted); margin-bottom:10px">Physical store locations across Pakistan
         </p>
         <div id="branch-legend-list"></div>
       </div>
-      <iframe id="gmap-iframe"
-        src="https://www.google.com/maps/embed?pb=!1m12!1m3!1d14474757.2186178!2d69.345116!3d30.375321!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1sElectronics%20stores%20Pakistan!5e0!3m2!1sen!2spk!4v1700000000000!5m2!1sen!2spk"
-        width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade">
-      </iframe>
+      <div id="leaflet-map"></div>
     </section>
 
   </main>
@@ -230,20 +229,10 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- ── Scripts ───────────────────────────────────────────────────────── -->
-  <script>
-    window.GOOGLE_MAPS_KEY = "{{ google_maps_key }}";
-  </script>
+  <!-- Leaflet.js -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-
-  {% if google_maps_key and google_maps_key != 'YOUR_GOOGLE_MAPS_API_KEY_HERE' %}
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_key }}&callback=initMap"></script>
-  {% else %}
-  <script>
-    window.addEventListener('load', () => {
-      if (typeof window.initMap === 'function') window.initMap(false);
-    });
-  </script>
-  {% endif %}
 </body>
 
 </html>

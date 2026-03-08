@@ -123,6 +123,7 @@ def api_optimize():
       budget     float  (optional)
       priority   str    "total_cost" | "price" | "distance"  (optional)
       pages      int    (optional, default 2)
+      query      str    (optional, search term to filter products)
     """
     data = request.json or {}
     user_lat  = data.get("user_lat")
@@ -130,17 +131,19 @@ def api_optimize():
     budget    = data.get("budget")
     priority  = data.get("priority", "total_cost")
     pages     = int(data.get("pages", 2))
+    query     = data.get("query")
 
     if user_lat is None or user_lon is None:
         return jsonify({"error": "user_lat and user_lon are required"}), 400
 
     try:
-        products = _get_products("electronics", pages)
+        products = _get_products("electronics", pages, query=query)
         ranked   = rank_branches(
             float(user_lat), float(user_lon),
             "electronics", products,
             budget=float(budget) if budget else None,
             priority=priority,
+            query=query,
         )
         decision = recommend(ranked)
         return jsonify(decision)
